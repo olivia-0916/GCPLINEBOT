@@ -34,12 +34,15 @@ D.風格為：「像一位懂動物、也懂你的人」，適合與家庭、學
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature")
     body = request.get_data(as_text=True)
+
+    print("[Webhook Received]", body)
 
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
+        print("[Invalid Signature]")
         abort(400)
 
     return "OK"
@@ -47,10 +50,11 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text
+    print(f"[User Message] {user_msg}")
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",  # 建議使用 gpt-4o，除非你確定帳號已開通 gpt-4o-mini
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg}
@@ -59,8 +63,10 @@ def handle_message(event):
             temperature=0.7
         )
         reply = response.choices[0].message["content"].strip()
+        print(f"[OpenAI Reply] {reply}")
     except Exception as e:
-        reply = f"❗發生錯誤：{e}"
+        print(f"[OpenAI Error] {e}")
+        reply = "🐒 抱歉，剛剛我有點忙不過來，能再問我一次嗎？"
 
     line_bot_api.reply_message(
         event.reply_token,
@@ -68,4 +74,6 @@ def handle_message(event):
     )
 
 if __name__ == "__main__":
-    app.run()
+    port = int(os.getenv('PORT', 8080))
+    print(f"🚀 應用程式啟動中，監聽埠號 {port}...")
+    app.run(host='0.0.0.0', port=port)
