@@ -2,33 +2,31 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import openai
 import os
 
 app = Flask(__name__)
 
-# 環境變數設定（你要在 GCP 的 Secret Manager 或 Cloud Run 裡設好）
+# 讀取環境變數
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
+# 初始化 LINE 和 OpenAI
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
+openai.api_key = OPENAI_API_KEY
 
 @app.route("/")
 def index():
-    return "LINE Webhook is running!"
+    return "LINE GPT Webhook is running!"
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    # 取得 LINE 的 X-Line-Signature
-    signature = request.headers["X-Line-Signature"]
-
-    # 取得 request body 作為文字
+    signature = request.headers.get("X-Line-Signature")
     body = request.get_data(as_text=True)
-
-    # 紀錄 log
     app.logger.info("Request body: " + body)
 
-    # 驗證簽名
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
@@ -36,12 +34,26 @@ def callback():
 
     return "OK"
 
-# 處理文字訊息
+# 回覆使用者文字訊息（用 GPT）
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    received_text = event.message.text
-    reply_text = f"你說的是：「{received_text}」"
+    user_text = event.message.text
 
+    try:
+        # 呼叫 OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-4",  # 或換成 "gpt-4"
+            messages=[
+                {"role": "system", "content": "你是一個友善的聊天助手。"},
+                {"role": "user", "content": user_text}
+            ],
+            max_tokens=300
+        )
+        reply_text = response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        reply_text = f"發生錯誤：{str(e)}"
+
+    # 回覆 LINE 使用者
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=reply_text)
