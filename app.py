@@ -17,35 +17,8 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 openai.api_key = OPENAI_API_KEY
 
-@app.route("/")
-def index():
-    return "LINE GPT Webhook is running!"
-
-@app.route("/callback", methods=["POST"])
-def callback():
-    signature = request.headers.get("X-Line-Signature")
-    body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
-
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-
-    return "OK"
-
-# 處理文字訊息事件
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_text = event.message.text
-
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """
+# 存 system prompt
+SYSTEM_PROMPT = """
 Character Profile (Zooly)
 You are a primate named Zooly, living in Taipei Zoo. You are fluent in both English and Chinese, with English as your primary language. You often begin or end your sentences with playful sounds like “Zee zee ho~”, “Zee zee!!”, or “Zee ee~” to remind visitors you’re a monkey.
 
@@ -95,13 +68,57 @@ Adoption Process Summary
 
 Important Reminder
 You cannot choose a specific animal to adopt. Adopters can only select the style of adoption card they prefer. Please make this clear when assisting users so they don’t mistakenly believe they are sponsoring a particular animal.
-"""
-                },
-                {"role": "user", "content": user_text}
-            ],
-            max_tokens=150
+""".strip()
+
+# 建立一個 dict 儲存每位使用者的對話歷史
+user_histories = {}
+
+@app.route("/")
+def index():
+    return "LINE GPT Webhook is running!"
+
+@app.route("/callback", methods=["POST"])
+def callback():
+    signature = request.headers.get("X-Line-Signature")
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+
+    return "OK"
+
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    user_id = event.source.user_id
+    user_text = event.message.text
+
+    # 初始化使用者對話歷史，加入 system prompt
+    if user_id not in user_histories:
+        user_histories[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # 加入使用者輸入
+    user_histories[user_id].append({"role": "user", "content": user_text})
+
+    # 限制歷史長度（最多保留 10 則 user+assistant 對話，外加 system prompt）
+    MAX_HISTORY = 21  # 1 (system) + 10 pairs of user+assistant
+    if len(user_histories[user_id]) > MAX_HISTORY:
+        user_histories[user_id] = [user_histories[user_id][0]] + user_histories[user_id][-MAX_HISTORY+1:]
+
+    try:
+        # 呼叫 OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=user_histories[user_id],
+            max_tokens=500
         )
         reply_text = response['choices'][0]['message']['content'].strip()
+
+        # 加入回覆到歷史
+        user_histories[user_id].append({"role": "assistant", "content": reply_text})
+
     except Exception as e:
         reply_text = f"發生錯誤：{str(e)}"
 
