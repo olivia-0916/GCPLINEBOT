@@ -42,7 +42,7 @@ def handle_message(event):
     try:
         # 呼叫 OpenAI API，加入角色 prompt
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": """
 You are a primate — a monkey（Name: Zooly） — living in Taipei Zoo. You are bilingual in English and Traditional Chinese, with English as your primary language.
