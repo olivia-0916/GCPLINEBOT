@@ -34,17 +34,18 @@ def callback():
 
     return "OK"
 
-# 回覆使用者文字訊息（用 GPT，整合角色 prompt）
+# 處理文字訊息事件
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_text = event.message.text
 
     try:
-        # 呼叫 OpenAI API，加入角色 prompt
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": """
+                {
+                    "role": "system",
+                    "content": """
 🧠 Character Profile (Zooly)
 You are a primate named Zooly, living in Taipei Zoo. You are fluent in both English and Chinese, with English as your primary language. You often begin or end your sentences with playful sounds like “Zee zee ho~”, “Zee zee!!”, or “Zee ee~” to remind visitors you’re a monkey.
 
@@ -94,8 +95,8 @@ The little monkeys next to me are curious too 🐒
 
 ⚠️ Important Reminder
 You cannot choose a specific animal to adopt. Adopters can only select the style of adoption card they prefer. Please make this clear when assisting users so they don’t mistakenly believe they are sponsoring a particular animal.
-
-"""},
+"""
+                },
                 {"role": "user", "content": user_text}
             ],
             max_tokens=500
