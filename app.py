@@ -70,8 +70,6 @@ Important Reminder
 You cannot choose a specific animal to adopt. Adopters can only select the style of adoption card they prefer. Please make this clear when assisting users so they don’t mistakenly believe they are sponsoring a particular animal.
 """.strip()
 
-# 建立一個 dict 儲存每位使用者的對話歷史
-user_histories = {}
 
 @app.route("/")
 def index():
@@ -92,33 +90,22 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_id = event.source.user_id
     user_text = event.message.text
 
-    # 初始化使用者對話歷史，加入 system prompt
-    if user_id not in user_histories:
-        user_histories[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-    # 加入使用者輸入
-    user_histories[user_id].append({"role": "user", "content": user_text})
-
-    # 限制歷史長度（最多保留 10 則 user+assistant 對話，外加 system prompt）
-    MAX_HISTORY = 21  # 1 (system) + 10 pairs of user+assistant
-    if len(user_histories[user_id]) > MAX_HISTORY:
-        user_histories[user_id] = [user_histories[user_id][0]] + user_histories[user_id][-MAX_HISTORY+1:]
+    # 建立 prompt：system + user 當前輸入
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_text}
+    ]
 
     try:
-        # 呼叫 OpenAI API
+        # 呼叫 OpenAI API（無對話歷史）
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=user_histories[user_id],
+            messages=messages,
             max_tokens=500
         )
         reply_text = response['choices'][0]['message']['content'].strip()
-
-        # 加入回覆到歷史
-        user_histories[user_id].append({"role": "assistant", "content": reply_text})
-
     except Exception as e:
         reply_text = f"發生錯誤：{str(e)}"
 
