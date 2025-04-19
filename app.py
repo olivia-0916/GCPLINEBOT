@@ -103,7 +103,7 @@ def handle_message(event):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=messages,
-            max_tokens=180
+            max_tokens=120
         )
         reply_text = response['choices'][0]['message']['content'].strip()
     except Exception as e:
